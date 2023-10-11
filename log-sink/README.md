@@ -1,4 +1,4 @@
-```
+```sql
 CREATE TABLE api_logs
 (
     api_timestamp DateTime,
@@ -11,6 +11,8 @@ CREATE TABLE api_logs
     entity_id String,
     operation_category String,
     operation_subcategory String
+    -- minmax index for http_status_code will optimize for range queries
+    INDEX http_status_code_index http_status_code TYPE minmax GRANULARITY 1
 ) ENGINE = MergeTree()
 PARTITION BY tenantId
 // probably remove tenantID here, since we’re partitioning by tenant ID.
@@ -61,6 +63,8 @@ WHERE api_timestamp BETWEEN '2023-01-01 00:00:00' AND '2023-01-31 23:59:59';
 API call completion time:
 Count, Filtering, Mean, Median:
 
+```sql
+-- Count, Filtering, Mean, Median:
 SELECT
     COUNT(*) AS total_calls,
     AVG(completion_time_ms) AS mean_completion_time,
@@ -68,8 +72,7 @@ SELECT
 FROM api_logs
 WHERE completion_time_ms > 500; -- Filtering for calls taking more than 500ms
 
-HTTP status code - Count, Filtering, Error Rate Calculation:
-
+-- HTTP status code - Count, Filtering, Error Rate Calculation:
 SELECT
     http_status_code,
     COUNT(*) AS total_calls,
@@ -78,8 +81,7 @@ FROM api_logs
 WHERE http_status_code >= 400
 GROUP BY http_status_code;
 
-Count, Filtering, grouping:
-
+-- Count, Filtering, grouping:
 SELECT
     url,
     COUNT(*) AS total_calls
@@ -116,4 +118,4 @@ SELECT
 FROM api_logs
 WHERE entity_type = 'ExampleType'
 GROUP BY entity_type, entity_id;
-
+```

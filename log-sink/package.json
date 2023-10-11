@@ -1,0 +1,18 @@
+{
+  "name": "log-sink",
+  "version": "1.0.0",
+  "description": "consume log events to write to clickhouse",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Madhukar Mishra",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.124",
+    "@types/node": "^20.8.4"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^0.2.2"
+  }
+}
