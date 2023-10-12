@@ -42,7 +42,7 @@ func startWiremockContainer() testcontainers.Container {
 func setupStubs(wiremockURL string) {
 	// Successful scenario
 	var err error
-	stubsFile, err := os.Open("./stubs.json")
+	stubsFile, err := os.Open("../stubs.json")
 	if err != nil {
 		log.Fatalf("Failed to open stubs file: %s", err)
 	}

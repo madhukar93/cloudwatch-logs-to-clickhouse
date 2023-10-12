@@ -64,7 +64,7 @@ func main() {
 
 	setupStubs(wiremockURL)
 
-	logProducerZipFile, err := os.ReadFile("../log-producer.zip")
+	logProducerZipFile, err := os.ReadFile("../dist/log-producer.zip")
 
 	if err != nil {
 		log.Fatalf("Failed to read log-producer.zip: %s", err)
