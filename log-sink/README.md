@@ -2,6 +2,8 @@
 CREATE TABLE api_logs
 (
     api_timestamp DateTime,
+    -- event_id is a unique identifier for each API call, used as primary key
+    event_id UUID,
     completion_time_ms UInt32,
     url String,
     http_status_code UInt16,
@@ -16,7 +18,7 @@ CREATE TABLE api_logs
 ) ENGINE = MergeTree()
 PARTITION BY tenantId
 // probably remove tenantID here, since we’re partitioning by tenant ID.
-ORDER BY (tenantId, api_timestamp);
+ORDER BY (api_timestamp, event_id);
 ```
 # Engine choice
 
