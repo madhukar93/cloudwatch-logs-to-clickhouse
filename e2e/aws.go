@@ -116,7 +116,9 @@ func createCloudwatchSubscription(destinationArn string, lambdaFunctionName stri
 		DestinationArn: aws.String(destinationArn),
 		FilterName:     aws.String("clickhouse-api-log"),
 		// https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html
-		FilterPattern: aws.String("{ ($.entityId != null) || ($.entityId != \"\") }"),
+		// FilterPattern: aws.String("{ ($.entityId != null) && ($.entityId != \"\") }"),
+		// escape filter patthern to avoid unsafe characters
+		FilterPattern: aws.String("{ $.entityId = \"*\" }"),
 		// The name of the log group.
 		LogGroupName: aws.String(logGroupName(lambdaFunctionName)),
 		//   // The ARN of an IAM role that grants CloudWatch Logs permissions to deliver
@@ -131,47 +133,6 @@ func createCloudwatchSubscription(destinationArn string, lambdaFunctionName stri
 	} else {
 		log.Printf("Subscription filter created successfully")
 	}
-}
-
-func printLambdaLogs(sess *session.Session, lambdaFunctionName string, nextToken *string) *string {
-	svc := cloudwatchlogs.New(sess)
-	// Get the latest log stream
-	streams, err := svc.DescribeLogStreams(&cloudwatchlogs.DescribeLogStreamsInput{
-		LogGroupName: aws.String(logGroupName(lambdaFunctionName)),
-		Descending:   aws.Bool(false),
-		Limit:        aws.Int64(5),
-		OrderBy:      aws.String("LastEventTime"),
-	})
-	if err != nil {
-		log.Fatalf("Failed to describe log streams: %s", err)
-	}
-	if len(streams.LogStreams) == 0 {
-		log.Fatalf("No log streams found for function: %s", lambdaFunctionName)
-	}
-
-	// if multiple streams are returned, use the first one because they should all have the same logs
-	logStreamName := *streams.LogStreams[0].LogStreamName
-
-	// Fetch the latest log events from the stream
-	query := &cloudwatchlogs.GetLogEventsInput{
-		LogGroupName:  aws.String(logGroupName(lambdaFunctionName)),
-		LogStreamName: aws.String(logStreamName),
-		NextToken:     nextToken,
-		StartFromHead: aws.Bool(true),
-		StartTime:     aws.Int64(time.Now().UnixMilli()),
-	}
-	resp, err := svc.GetLogEvents(query)
-	if err != nil {
-		log.Fatalf("Failed to get log events: %s", err)
-	}
-
-	// Display the log events
-	for _, event := range resp.Events {
-		fmt.Printf("%s: %s\n", lambdaFunctionName, *event.Message)
-	}
-
-	// Set the next token for the subsequent request
-	return nextToken
 }
 
 func waitForLambdaToBeActive(lambdaSvc *lambda.Lambda, functionName string) {

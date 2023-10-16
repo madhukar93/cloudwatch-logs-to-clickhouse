@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -13,7 +14,7 @@ func startlocalStackContainer() testcontainers.Container {
 
 	req := testcontainers.ContainerRequest{
 		Name:         "localstack",
-		Image:        "localstack/localstack",
+		Image:        "localstack/localstack-pro",
 		ExposedPorts: []string{"4566/tcp"}, // LocalStack now uses a single edge port
 		WaitingFor:   wait.ForLog("Ready."),
 		// mount /var/run/docker.sock:/var/run/docker.sock
@@ -25,8 +26,9 @@ func startlocalStackContainer() testcontainers.Container {
 			},
 		),
 		Env: map[string]string{
-			"SERVICES":      "apigateway,lambda,cloudwatch",
-			"IAM_SOFT_MODE": "1",
+			"SERVICES":           "apigateway,lambda,cloudwatch,kinesis",
+			"IAM_SOFT_MODE":      "1",
+			"LOCALSTACK_API_KEY": os.Getenv("LOCALSTACK_API_KEY"),
 		},
 	}
 
