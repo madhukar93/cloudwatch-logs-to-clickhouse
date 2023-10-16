@@ -6,6 +6,21 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+type MockScenario int
+
+const (
+	Success MockScenario = iota
+	InternalServerError
+	DelayedResponse
+	ConnectionReset
+	NotFound
+	ValidationFailure
+)
+
+func (m MockScenario) String() string {
+	return [...]string{"success", "internalServerError", "delayedResponse", "connectionReset", "notFound", "validationFailure"}[m]
+}
+
 type event struct {
 	TenantId             string
 	ThirdPartyName       string
@@ -13,6 +28,7 @@ type event struct {
 	EntityType           string
 	OperationCategory    string
 	OperationSubCategory string
+	MockScenario         string
 }
 
 // return json of events
@@ -25,6 +41,7 @@ func payloads() ([][]byte, error) {
 			EntityType:           "product",
 			OperationCategory:    "created",
 			OperationSubCategory: "subCat1",
+			MockScenario:         Success.String(),
 		},
 		{
 			TenantId:             "tenant1",
@@ -33,6 +50,7 @@ func payloads() ([][]byte, error) {
 			EntityType:           "product",
 			OperationCategory:    "priceUpdated",
 			OperationSubCategory: "subCat2",
+			MockScenario:         Success.String(),
 		},
 		{
 			TenantId:             "tenant2",
@@ -41,6 +59,7 @@ func payloads() ([][]byte, error) {
 			EntityType:           "order",
 			OperationCategory:    "checkout",
 			OperationSubCategory: "subCat1",
+			MockScenario:         InternalServerError.String(),
 		},
 		{
 			TenantId:             "tenant2",
@@ -49,6 +68,7 @@ func payloads() ([][]byte, error) {
 			EntityType:           "order",
 			OperationCategory:    "paid",
 			OperationSubCategory: "subCat3",
+			MockScenario:         DelayedResponse.String(),
 		},
 		{
 			TenantId:             "tenant1",
@@ -57,6 +77,7 @@ func payloads() ([][]byte, error) {
 			EntityType:           "order",
 			OperationCategory:    "enroute",
 			OperationSubCategory: "subCat2",
+			MockScenario:         ConnectionReset.String(),
 		},
 		{
 			TenantId:             "tenant2",
@@ -65,6 +86,7 @@ func payloads() ([][]byte, error) {
 			EntityType:           "product",
 			OperationCategory:    "created",
 			OperationSubCategory: "subCat3",
+			MockScenario:         NotFound.String(),
 		},
 		{
 			TenantId:             "tenant1",
@@ -73,6 +95,7 @@ func payloads() ([][]byte, error) {
 			EntityType:           "order",
 			OperationCategory:    "delivered",
 			OperationSubCategory: "subCat1",
+			MockScenario:         ValidationFailure.String(),
 		},
 		{
 			TenantId:             "tenant2",
@@ -81,6 +104,7 @@ func payloads() ([][]byte, error) {
 			EntityType:           "product",
 			OperationCategory:    "priceUpdated",
 			OperationSubCategory: "subCat2",
+			MockScenario:         DelayedResponse.String(),
 		},
 	}
 	p := make([][]byte, len(e))

@@ -57,7 +57,6 @@ const host = (() => {
 })();
 
 exports.handler = async (event, context) => {
-  // base64 decode event.awslogs.data
   console.log("Received event:", JSON.stringify(event, null, 2));
   console.log("context:", JSON.stringify(context, null, 2));
   if (!event) {
@@ -90,7 +89,7 @@ exports.handler = async (event, context) => {
   }
   const completionTime = Date.now() - startTime;
 
-  console.log({
+  console.log(JSON.stringify({
     apiTimestamp: new Date().toISOString(),
     apiCallCompletionTime: completionTime,
     apiUrl: url,
@@ -98,6 +97,8 @@ exports.handler = async (event, context) => {
     httpStatusCode: response.statusCode || 0,
     thirdPartyName: event.ThirdPartyName,
     tenantId: event.TenantId,
+    operationCategory: event.OperationCategory,
+    operationSubCategory: event.OperationCategory,
     entityType: event.EntityType,
     entityId: event.EntityId,
 
@@ -113,7 +114,7 @@ exports.handler = async (event, context) => {
       logStreamName: context.logStreamName,
       awsRequestId: context.awsRequestId,
     },
-  });
+  }));
 
   return {
     statusCode: 200,

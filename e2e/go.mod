@@ -6,6 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.45.23
 	github.com/satori/go.uuid v1.2.0
 	github.com/testcontainers/testcontainers-go v0.25.0
+	github.com/tidwall/pretty v1.2.1
 )
 
 require (

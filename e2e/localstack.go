@@ -12,7 +12,7 @@ func startlocalStackContainer() testcontainers.Container {
 	ctx := context.Background()
 
 	req := testcontainers.ContainerRequest{
-		// Name:         "localstack",
+		Name:         "localstack",
 		Image:        "localstack/localstack",
 		ExposedPorts: []string{"4566/tcp"}, // LocalStack now uses a single edge port
 		WaitingFor:   wait.ForLog("Ready."),
@@ -31,7 +31,7 @@ func startlocalStackContainer() testcontainers.Container {
 	}
 
 	localstackContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		// Reuse:            true,
+		Reuse:            true,
 		ContainerRequest: req,
 		Started:          true,
 	})

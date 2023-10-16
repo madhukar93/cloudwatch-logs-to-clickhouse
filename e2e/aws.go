@@ -1,13 +1,19 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"time"
+
+	"github.com/tidwall/pretty"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
+	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/lambda"
 )
 
@@ -36,7 +42,7 @@ func NewNodeJsLambda(params lambdaParams, session *session.Session) *lambda.Func
 		// https://docs.localstack.cloud/user-guide/aws/iam/#soft-mode
 		Role:         aws.String("arn:aws:iam::123456789012:role/lambda-role"),
 		FunctionName: aws.String(params.functionName),
-		Handler:      aws.String("main"),
+		Handler:      aws.String("index.handler"),
 		MemorySize:   aws.Int64(128),
 		PackageType:  aws.String("Zip"),
 		Runtime:      aws.String("nodejs18.x"),
@@ -72,19 +78,58 @@ func createCloudwatchLogGroupForLambda(lambda *lambda.FunctionConfiguration, ses
 	if _, err := logsvc.CreateLogStream(createLogStreamInput); err != nil {
 		log.Fatalf("Failed to create log stream: %s", err)
 	}
+}
 
+func createKinesisDataStream(session *session.Session) *kinesis.StreamDescription {
+	kinesisSvc := kinesis.New(session)
+	streamName := "api_logs_to_cloudwatch"
+	shardCount := int64(1)
+
+	_, err := kinesisSvc.CreateStream(&kinesis.CreateStreamInput{
+		StreamName: aws.String(streamName),
+		ShardCount: aws.Int64(shardCount),
+	})
+
+	if err != nil {
+		log.Fatalf("Failed to create stream: %v", err)
+	}
+
+	log.Printf("Stream %s created successfully", streamName)
+
+	output, err := kinesisSvc.DescribeStream(&kinesis.DescribeStreamInput{
+		StreamName: aws.String(streamName),
+	})
+	if err != nil {
+		log.Fatalf("Failed to describe Kinesis stream: %v", err)
+	}
+
+	return output.StreamDescription
+}
+
+func createCloudwatchSubscription(destinationArn string, lambdaFunctionName string, session *session.Session) {
 	// create subscription filter
 	// https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/SubscriptionFilters.html
 	// https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html
+	logSvc := cloudwatchlogs.New(session)
+	// https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/SubscriptionFilters.html
 	pubsubSubscriptionInput := &cloudwatchlogs.PutSubscriptionFilterInput{
-		DestinationArn: lambda.FunctionArn,
-		FilterName:     aws.String("clickhouse-subscription-filter"),
-		FilterPattern:  aws.String(""),
-		LogGroupName:   logGroupName,
+		DestinationArn: aws.String(destinationArn),
+		FilterName:     aws.String("clickhouse-api-log"),
+		// https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html
+		FilterPattern: aws.String("{ ($.entityId != null) || ($.entityId != \"\") }"),
+		// The name of the log group.
+		LogGroupName: aws.String(logGroupName(lambdaFunctionName)),
+		//   // The ARN of an IAM role that grants CloudWatch Logs permissions to deliver
+		//   // ingested log events to the destination stream. You don't need to provide
+		//   // the ARN when you are working with a logical destination for cross-account
+		//   // delivery.
+		RoleArn: aws.String("arn:aws:iam::123456789012:role/role-to-push-to-kinesis"),
 	}
 
-	if _, err := logsvc.PutSubscriptionFilter(pubsubSubscriptionInput); err != nil {
+	if _, err := logSvc.PutSubscriptionFilter(pubsubSubscriptionInput); err != nil {
 		log.Fatalf("Failed to create subscription filter: %s", err)
+	} else {
+		log.Printf("Subscription filter created successfully")
 	}
 }
 
@@ -129,14 +174,6 @@ func printLambdaLogs(sess *session.Session, lambdaFunctionName string, nextToken
 	return nextToken
 }
 
-func pollLambdaLogs(session *session.Session, logsSinkFunction *lambda.FunctionConfiguration) {
-	for {
-		var nextToken *string
-		nextToken = printLambdaLogs(session, *logsSinkFunction.FunctionName, nextToken)
-		time.Sleep(5 * time.Second)
-	}
-}
-
 func waitForLambdaToBeActive(lambdaSvc *lambda.Lambda, functionName string) {
 	for {
 		result, err := lambdaSvc.GetFunction(&lambda.GetFunctionInput{
@@ -155,5 +192,65 @@ func waitForLambdaToBeActive(lambdaSvc *lambda.Lambda, functionName string) {
 		}
 
 		time.Sleep(5 * time.Second) // Adjust polling interval as needed
+	}
+}
+
+func viewKinesisRecords(streamName *string, session *session.Session) {
+	// Create a new session and a Kinesis service client
+	kinesisClient := kinesis.New(session)
+	listShardsOutput, err := kinesisClient.ListShards(&kinesis.ListShardsInput{
+		StreamName: streamName,
+	})
+
+	if err != nil {
+		log.Fatalf("Failed to list shards: %v", err)
+	}
+
+	// Obtain a shard iterator
+	for _, shard := range listShardsOutput.Shards {
+		getShardIteratorOutput, err := kinesisClient.GetShardIterator(&kinesis.GetShardIteratorInput{
+			StreamName:        streamName,
+			ShardId:           shard.ShardId,
+			ShardIteratorType: aws.String("TRIM_HORIZON"),
+		})
+		if err != nil {
+			log.Fatalf("Failed to get shard iterator: %v", err)
+		}
+		shardIterator := getShardIteratorOutput.ShardIterator
+
+		// Use the shard iterator to get records
+		getRecordsOutput, err := kinesisClient.GetRecords(&kinesis.GetRecordsInput{
+			ShardIterator: shardIterator,
+		})
+		if err != nil {
+			log.Fatalf("Failed to get records: %v", err)
+		}
+
+		// Decode and print the event data
+		for _, record := range getRecordsOutput.Records {
+			// write record.Data to a file
+			// os.WriteFile(fmt.Sprintf("kinesis-record-%d.txt", i), record.Data, 0644)
+			// b64decoded, err := base64.StdEncoding.DecodeString(string(record.Data))
+			// if err != nil {
+			//   log.Printf("Failed to decode record data: %v", err)
+			//   continue
+			// }
+
+			reader := bytes.NewReader(record.Data)
+			gzipReader, err := gzip.NewReader(reader)
+			if err != nil {
+				log.Printf("Failed to create gzip reader: %v", err)
+				continue
+			}
+
+			output, err := ioutil.ReadAll(gzipReader)
+			if err != nil {
+				log.Printf("Failed to read gzip data: %v", err)
+				continue
+			}
+
+			fmt.Printf("Sequence Number: %s, Partition Key: %s, Data: %s\n",
+				*record.SequenceNumber, *record.PartitionKey, pretty.Color(pretty.Pretty(output), nil))
+		}
 	}
 }
